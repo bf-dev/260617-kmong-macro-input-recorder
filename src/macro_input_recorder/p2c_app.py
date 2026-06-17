@@ -17,6 +17,7 @@ class P2CApp:
         self.root.title("P2C 포스 자동화")
         self.root.geometry("760x560")
         self.root.minsize(720, 520)
+        self.root.configure(bg="#f3f4f6")
         self.log_queue: queue.Queue[str] = queue.Queue()
         self.runner = MacroRunner(self._log)
         self.worker: threading.Thread | None = None
@@ -41,34 +42,68 @@ class P2CApp:
 
         title = ttk.Label(outer, text="P2C 포스 자동화", font=("Malgun Gothic", 18, "bold"))
         title.pack(anchor=tk.W)
-        subtitle = ttk.Label(
-            outer,
-            text="녹화 파일을 가져온 뒤 이미지 인식 우선, 좌표 보정 fallback으로 개점/마감/가승인 작업을 실행합니다.",
-            wraplength=700,
-        )
-        subtitle.pack(anchor=tk.W, pady=(4, 12))
 
         notebook = ttk.Notebook(outer)
-        notebook.pack(fill=tk.BOTH, expand=True)
+        notebook.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
         self.run_tab = ttk.Frame(notebook, padding=12)
+        self.settings_tab = ttk.Frame(notebook, padding=12)
         self.import_tab = ttk.Frame(notebook, padding=12)
         self.log_tab = ttk.Frame(notebook, padding=12)
         notebook.add(self.run_tab, text="실행")
+        notebook.add(self.settings_tab, text="설정")
         notebook.add(self.import_tab, text="녹화 가져오기")
         notebook.add(self.log_tab, text="로그")
         self._build_run_tab()
+        self._build_settings_tab()
         self._build_import_tab()
         self._build_log_tab()
 
     def _build_run_tab(self) -> None:
-        row = ttk.Frame(self.run_tab)
-        row.pack(fill=tk.X)
+        self.run_tab.columnconfigure(0, weight=1)
+        self.run_tab.rowconfigure(0, weight=1)
+
+        button_frame = ttk.Frame(self.run_tab)
+        button_frame.grid(row=0, column=0, sticky="nsew")
+        for column in range(3):
+            button_frame.columnconfigure(column, weight=1, uniform="actions")
+        button_frame.rowconfigure(0, weight=1)
+
+        actions = [
+            ("가승인", "#16a34a", "#ffffff", "가승인"),
+            ("개점", "#2563eb", "#ffffff", "개점"),
+            ("마감", "#dc2626", "#ffffff", "마감"),
+        ]
+        for column, (text, bg, fg, workflow_name) in enumerate(actions):
+            button = tk.Button(
+                button_frame,
+                text=text,
+                command=lambda name=workflow_name: self.run_named_once(name),
+                bg=bg,
+                fg=fg,
+                activebackground=bg,
+                activeforeground=fg,
+                relief=tk.FLAT,
+                font=("Malgun Gothic", 30, "bold"),
+                cursor="hand2",
+                bd=0,
+                highlightthickness=0,
+            )
+            button.grid(row=0, column=column, sticky="nsew", padx=10, pady=16)
+
+    def _build_settings_tab(self) -> None:
+        status = ttk.Frame(self.settings_tab)
+        status.pack(fill=tk.X)
+        ttk.Label(status, text="상태").pack(side=tk.LEFT)
+        ttk.Label(status, textvariable=self.status_var, font=("Malgun Gothic", 11, "bold")).pack(side=tk.LEFT, padx=(8, 0))
+
+        row = ttk.Frame(self.settings_tab)
+        row.pack(fill=tk.X, pady=(14, 0))
         ttk.Label(row, text="작업 선택").pack(side=tk.LEFT)
         self.workflow_combo = ttk.Combobox(row, textvariable=self.selected_workflow, state="readonly", width=42)
         self.workflow_combo.pack(side=tk.LEFT, padx=(8, 8))
         ttk.Button(row, text="새로고침", command=self._reload_workflows).pack(side=tk.LEFT)
 
-        settings = ttk.LabelFrame(self.run_tab, text="기본 설정", padding=10)
+        settings = ttk.LabelFrame(self.settings_tab, text="기본 설정", padding=10)
         settings.pack(fill=tk.X, pady=(14, 0))
         ttk.Label(settings, text="가승인 금액").grid(row=0, column=0, sticky=tk.W)
         ttk.Entry(settings, textvariable=self.amount_var, width=12).grid(row=0, column=1, sticky=tk.W, padx=(8, 18))
@@ -78,30 +113,17 @@ class P2CApp:
         ttk.Scale(settings, variable=self.confidence_var, from_=0.60, to=0.95, orient=tk.HORIZONTAL, length=180).grid(row=1, column=1, columnspan=2, sticky=tk.W, padx=(8, 18), pady=(8, 0))
         ttk.Checkbutton(settings, text="이미지 인식 실패 시 좌표 보정 사용", variable=self.coord_fallback_var).grid(row=1, column=3, columnspan=2, sticky=tk.W, pady=(8, 0))
 
-        buttons = ttk.LabelFrame(self.run_tab, text="수동 실행", padding=10)
+        buttons = ttk.LabelFrame(self.settings_tab, text="수동 실행", padding=10)
         buttons.pack(fill=tk.X, pady=(14, 0))
         ttk.Button(buttons, text="선택 작업 1회 실행", command=self.run_selected_once).pack(side=tk.LEFT)
         ttk.Button(buttons, text="중지", command=self.stop_all).pack(side=tk.LEFT, padx=(8, 0))
 
-        hourly = ttk.LabelFrame(self.run_tab, text="시간당 가승인", padding=10)
+        hourly = ttk.LabelFrame(self.settings_tab, text="시간당 가승인", padding=10)
         hourly.pack(fill=tk.X, pady=(14, 0))
         ttk.Label(hourly, text="간격(분)").pack(side=tk.LEFT)
         ttk.Entry(hourly, textvariable=self.interval_var, width=8).pack(side=tk.LEFT, padx=(8, 8))
         ttk.Button(hourly, text="시간당 자동 시작", command=self.start_hourly).pack(side=tk.LEFT)
         ttk.Button(hourly, text="자동 중지", command=self.stop_all).pack(side=tk.LEFT, padx=(8, 0))
-
-        status = ttk.LabelFrame(self.run_tab, text="상태", padding=10)
-        status.pack(fill=tk.BOTH, expand=True, pady=(14, 0))
-        ttk.Label(status, textvariable=self.status_var, font=("Malgun Gothic", 11, "bold")).pack(anchor=tk.W)
-        ttk.Label(
-            status,
-            text=(
-                "긴급 중지: 마우스를 화면 왼쪽 위 모서리로 이동하면 PyAutoGUI failsafe가 작동합니다. "
-                "결제/가승인 확인 단계는 실제 화면을 보고 한 번 더 확인 후 진행하세요."
-            ),
-            foreground="#555",
-            wraplength=650,
-        ).pack(anchor=tk.W, pady=(10, 0))
 
     def _build_import_tab(self) -> None:
         ttk.Label(
@@ -169,6 +191,19 @@ class P2CApp:
                 return workflow
         return None
 
+    def find_workflow(self, label: str) -> MacroWorkflow | None:
+        normalized = label.strip()
+        for workflow in self.workflows:
+            if workflow.name == normalized:
+                return workflow
+        for workflow in self.workflows:
+            if workflow.name.startswith(normalized):
+                return workflow
+        for workflow in self.workflows:
+            if normalized in workflow.name:
+                return workflow
+        return None
+
     def options(self) -> RunOptions:
         return RunOptions(confidence=float(self.confidence_var.get()), coordinate_fallback=bool(self.coord_fallback_var.get()))
 
@@ -177,6 +212,17 @@ class P2CApp:
         if workflow is None:
             messagebox.showwarning("작업 없음", "먼저 recording.zip을 가져와 작업을 선택해주세요.")
             return
+        self._start_workflow(workflow)
+
+    def run_named_once(self, label: str) -> None:
+        workflow = self.find_workflow(label)
+        if workflow is None:
+            messagebox.showwarning("작업 없음", f"먼저 '{label}' 작업 녹화를 가져와주세요.")
+            return
+        self.selected_workflow.set(workflow.name)
+        self._start_workflow(workflow)
+
+    def _start_workflow(self, workflow: MacroWorkflow) -> None:
         if self.worker and self.worker.is_alive():
             messagebox.showwarning("실행 중", "이미 작업이 실행 중입니다.")
             return
