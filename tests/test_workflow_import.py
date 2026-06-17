@@ -81,3 +81,31 @@ def test_import_recording_many_keeps_multiple_sessions(tmp_path: Path) -> None:
     assert [w.steps[0].x for w in workflows] == [120, 320]
     assert (tmp_path / "workflows" / "가승인_01_20260617_102542" / "anchors" / "001_anchor.png").exists()
     assert len(load_workflows(tmp_path / "workflows")) == 2
+
+
+def test_import_recording_ignores_alt_tab_and_recorder_window_clicks(tmp_path: Path) -> None:
+    output = tmp_path / "rec" / "output"
+    images = output / "images"
+    images.mkdir(parents=True)
+    Image.new("RGB", (1024, 768), "gray").save(images / "000001_mouse_click.png")
+    tool_shot = Image.new("RGB", (1024, 768), "gray")
+    # Large bright floating helper window, like Macro Input Recorder over the POS.
+    for px in range(426, 1024):
+        for py in range(145, 535):
+            tool_shot.putpixel((px, py), (248, 248, 248))
+    tool_shot.save(images / "000004_mouse_click.png")
+    events = {
+        "event_count": 4,
+        "events": [
+            {"index": 1, "event_type": "mouse_click", "x": 100, "y": 100, "button": "left", "relative_ms": 100, "screenshot": "images/000001_mouse_click.png"},
+            {"index": 2, "event_type": "key_press", "key": "alt_l", "relative_ms": 200, "screenshot": "images/000002_key_press.png"},
+            {"index": 3, "event_type": "key_press", "key": "tab", "relative_ms": 250, "screenshot": "images/000003_key_press.png"},
+            {"index": 4, "event_type": "mouse_click", "x": 620, "y": 300, "button": "left", "relative_ms": 500, "screenshot": "images/000004_mouse_click.png"},
+        ],
+    }
+    (output / "events.json").write_text(json.dumps(events), encoding="utf-8")
+
+    workflow = import_recording(output, "가승인", tmp_path / "workflows")
+
+    assert len(workflow.steps) == 1
+    assert workflow.steps[0].index == 1

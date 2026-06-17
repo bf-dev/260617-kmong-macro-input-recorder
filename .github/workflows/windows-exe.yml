@@ -33,6 +33,7 @@ jobs:
           path: |
             dist/P2CPOSMacro.exe
             dist/P2CPOSMacro.exe.sha256.txt
+            dist/p2c-pos-macro-ui-preview.png
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -42,4 +43,5 @@ jobs:
           files: |
             dist/P2CPOSMacro.exe
             dist/P2CPOSMacro.exe.sha256.txt
+            dist/p2c-pos-macro-ui-preview.png
           generate_release_notes: true

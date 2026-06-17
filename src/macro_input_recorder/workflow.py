@@ -11,6 +11,18 @@ from PIL import Image
 
 WORKFLOW_VERSION = 1
 ANCHOR_SIZE = 180
+SYSTEM_NAVIGATION_KEYS = {
+    "alt",
+    "alt_l",
+    "alt_r",
+    "cmd",
+    "cmd_l",
+    "cmd_r",
+    "meta",
+    "super",
+    "win",
+    "windows",
+}
 
 
 @dataclass
@@ -161,9 +173,20 @@ def _import_events_file(events_path: Path, workflow_name: str, created_from: str
 
     steps: list[MacroStep] = []
     previous_ms = 0
+    alt_seen = False
+    ignore_rest = False
     for raw in events:
         event_type = str(raw.get("event_type", "input"))
         if event_type not in {"mouse_click", "key_press"}:
+            continue
+        key = str(raw.get("key", "")).lower().replace("key.", "") if raw.get("key") else ""
+        if ignore_rest:
+            continue
+        if event_type == "key_press" and key in SYSTEM_NAVIGATION_KEYS:
+            alt_seen = key.startswith("alt")
+            continue
+        if event_type == "key_press" and key == "tab" and alt_seen:
+            ignore_rest = True
             continue
         index = int(raw.get("index", len(steps) + 1))
         rel_ms = int(raw.get("relative_ms") or previous_ms)
@@ -176,6 +199,8 @@ def _import_events_file(events_path: Path, workflow_name: str, created_from: str
         x = _optional_int(raw.get("x"))
         y = _optional_int(raw.get("y"))
         if screenshot_path and screenshot_path.exists():
+            if event_type == "mouse_click" and x is not None and y is not None and _looks_like_recorder_window_click(screenshot_path, x, y):
+                continue
             with Image.open(screenshot_path) as img:
                 width, height = img.size
                 if x is not None and y is not None and event_type == "mouse_click":
@@ -280,6 +305,41 @@ def _optional_int(value: Any) -> int | None:
         return int(value)
     except Exception:
         return None
+
+
+def _looks_like_recorder_window_click(screenshot_path: Path, x: int, y: int) -> bool:
+    """Best-effort filter for clicks on the Macro Input Recorder itself.
+
+    When the operator stops a recording, the recorder window is captured as a
+    large bright floating panel. Replaying that final click would click our
+    helper program instead of the POS screen, so importer-side filtering keeps
+    those tool-control clicks out of the workflow.
+    """
+    try:
+        import cv2
+        import numpy as np
+
+        with Image.open(screenshot_path) as img:
+            arr = np.array(img.convert("RGB"))
+        gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+        mask = (gray > 235).astype("uint8")
+        num, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+        for idx in range(1, num):
+            left, top, width, height, area = [int(v) for v in stats[idx]]
+            if not (left <= x <= left + width and top <= y <= top + height):
+                continue
+            fill_ratio = area / max(1, width * height)
+            if (
+                350 <= left <= 520
+                and 80 <= top <= 220
+                and 520 <= width <= 760
+                and 300 <= height <= 460
+                and fill_ratio >= 0.85
+            ):
+                return True
+    except Exception:
+        return False
+    return False
 
 
 def _safe_name(name: str) -> str:
