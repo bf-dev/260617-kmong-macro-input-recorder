@@ -22,3 +22,6 @@ output/
 .DS_Store
 .vscode/
 .idea/
+
+# Local delivery/status artifacts
+delivery/

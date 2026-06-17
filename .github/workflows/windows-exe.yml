@@ -29,10 +29,10 @@ jobs:
       - name: Upload executable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MacroInputRecorder-Windows
+          name: P2CPOSMacro-Windows
           path: |
-            dist/MacroInputRecorder.exe
-            dist/MacroInputRecorder.exe.sha256.txt
+            dist/P2CPOSMacro.exe
+            dist/P2CPOSMacro.exe.sha256.txt
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -40,6 +40,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/MacroInputRecorder.exe
-            dist/MacroInputRecorder.exe.sha256.txt
+            dist/P2CPOSMacro.exe
+            dist/P2CPOSMacro.exe.sha256.txt
           generate_release_notes: true

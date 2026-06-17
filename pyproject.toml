@@ -5,11 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "macro-input-recorder"
 version = "0.1.0"
-description = "Visible local input recorder for macro preparation with screenshot and JSON output."
+description = "P2C POS macro recorder and replay automation for Windows."
 requires-python = ">=3.10"
 dependencies = [
   "pynput>=1.7.7",
   "mss>=9.0.1",
+  "pillow>=10.0",
+  "pyautogui>=0.9.54",
+  "opencv-python-headless>=4.9",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +25,7 @@ test = [
 
 [project.scripts]
 macro-input-recorder = "macro_input_recorder.app:main"
+p2c-pos-macro = "macro_input_recorder.p2c_app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

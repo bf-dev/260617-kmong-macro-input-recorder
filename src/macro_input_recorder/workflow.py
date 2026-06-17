@@ -1,0 +1,247 @@
+from __future__ import annotations
+
+import json
+import shutil
+import zipfile
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from PIL import Image
+
+WORKFLOW_VERSION = 1
+ANCHOR_SIZE = 180
+
+
+@dataclass
+class MacroStep:
+    index: int
+    event_type: str
+    x: int | None = None
+    y: int | None = None
+    screen_width: int | None = None
+    screen_height: int | None = None
+    x_ratio: float | None = None
+    y_ratio: float | None = None
+    button: str | None = None
+    key: str | None = None
+    char: str | None = None
+    anchor: str | None = None
+    anchor_offset_x: int | None = None
+    anchor_offset_y: int | None = None
+    wait_after_ms: int = 250
+    note: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "MacroStep":
+        known = {f.name for f in cls.__dataclass_fields__.values()}  # type: ignore[attr-defined]
+        return cls(**{k: v for k, v in data.items() if k in known})
+
+    def to_dict(self) -> dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items() if v is not None and v != ""}
+
+
+@dataclass
+class MacroWorkflow:
+    name: str
+    source: str
+    steps: list[MacroStep] = field(default_factory=list)
+    created_from: str = ""
+    description: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "MacroWorkflow":
+        return cls(
+            name=str(data.get("name", "녹화 작업")),
+            source=str(data.get("source", "manual")),
+            steps=[MacroStep.from_dict(item) for item in data.get("steps", [])],
+            created_from=str(data.get("created_from", "")),
+            description=str(data.get("description", "")),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "version": WORKFLOW_VERSION,
+            "name": self.name,
+            "source": self.source,
+            "created_from": self.created_from,
+            "description": self.description,
+            "steps": [step.to_dict() for step in self.steps],
+        }
+
+
+def app_data_dir() -> Path:
+    root = Path.home() / "Documents" / "P2C_POS_자동화"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def workflows_dir() -> Path:
+    path = app_data_dir() / "workflows"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def workflow_file(name: str) -> Path:
+    safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in name).strip("_") or "workflow"
+    return workflows_dir() / f"{safe}.json"
+
+
+def load_workflows(root: Path | None = None) -> list[MacroWorkflow]:
+    folder = root or workflows_dir()
+    if not folder.exists():
+        return []
+    workflows: list[MacroWorkflow] = []
+    for path in sorted(folder.glob("*.json")):
+        try:
+            workflows.append(MacroWorkflow.from_dict(json.loads(path.read_text(encoding="utf-8"))))
+        except Exception:
+            continue
+    return workflows
+
+
+def save_workflow(workflow: MacroWorkflow, root: Path | None = None) -> Path:
+    folder = root or workflows_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    path = workflow_file(workflow.name) if root is None else folder / f"{workflow.name}.json"
+    path.write_text(json.dumps(workflow.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def import_recording(source: Path, workflow_name: str, root: Path | None = None) -> MacroWorkflow:
+    """Import a MacroInputRecorder output zip/folder into a replayable workflow.
+
+    Expected input forms:
+    - recording.zip containing output/events.json and output/images/*.png
+    - a folder containing output/events.json
+    - the output folder itself containing events.json
+    """
+    base = root or workflows_dir()
+    base.mkdir(parents=True, exist_ok=True)
+    target = base / _safe_name(workflow_name)
+    if target.exists():
+        shutil.rmtree(target)
+    target.mkdir(parents=True)
+
+    source_root = _extract_or_locate(source, target / "source")
+    events_path = _find_events_json(source_root)
+    data = json.loads(events_path.read_text(encoding="utf-8"))
+    events = data.get("events") or []
+
+    image_target = target / "anchors"
+    image_target.mkdir(parents=True, exist_ok=True)
+
+    steps: list[MacroStep] = []
+    previous_ms = 0
+    for raw in events:
+        event_type = str(raw.get("event_type", "input"))
+        if event_type not in {"mouse_click", "key_press"}:
+            continue
+        index = int(raw.get("index", len(steps) + 1))
+        rel_ms = int(raw.get("relative_ms") or previous_ms)
+        wait_after_ms = max(120, min(2500, rel_ms - previous_ms)) if steps else 250
+        previous_ms = rel_ms
+        screenshot_path = _resolve_screenshot(events_path.parent, raw)
+        width = height = None
+        anchor_rel = None
+        offset_x = offset_y = None
+        x = _optional_int(raw.get("x"))
+        y = _optional_int(raw.get("y"))
+        if screenshot_path and screenshot_path.exists():
+            with Image.open(screenshot_path) as img:
+                width, height = img.size
+                if x is not None and y is not None and event_type == "mouse_click":
+                    anchor_name, offset_x, offset_y = _write_anchor(img, x, y, image_target, index)
+                    anchor_rel = f"anchors/{anchor_name}"
+
+        step = MacroStep(
+            index=index,
+            event_type=event_type,
+            x=x,
+            y=y,
+            screen_width=width,
+            screen_height=height,
+            x_ratio=(x / width) if x is not None and width else None,
+            y_ratio=(y / height) if y is not None and height else None,
+            button=str(raw.get("button", "left")) if event_type == "mouse_click" else None,
+            key=str(raw.get("key", "")) if raw.get("key") else None,
+            char=str(raw.get("char", "")) if raw.get("char") else None,
+            anchor=anchor_rel,
+            anchor_offset_x=offset_x,
+            anchor_offset_y=offset_y,
+            wait_after_ms=wait_after_ms,
+        )
+        steps.append(step)
+
+    workflow = MacroWorkflow(
+        name=workflow_name,
+        source="recording",
+        created_from=str(source),
+        description=f"{len(steps)}개 입력 단계가 녹화 파일에서 생성되었습니다.",
+        steps=steps,
+    )
+    (target / "workflow.json").write_text(json.dumps(workflow.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+    save_workflow(workflow, base)
+    return workflow
+
+
+def workflow_asset_base(workflow: MacroWorkflow) -> Path:
+    return workflows_dir() / _safe_name(workflow.name)
+
+
+def _extract_or_locate(source: Path, target: Path) -> Path:
+    source = source.expanduser().resolve()
+    if source.is_dir():
+        return source
+    target.mkdir(parents=True, exist_ok=True)
+    if zipfile.is_zipfile(source):
+        with zipfile.ZipFile(source) as zf:
+            zf.extractall(target)
+        return target
+    raise ValueError("recording.zip 또는 녹화 output 폴더를 선택해주세요.")
+
+
+def _find_events_json(root: Path) -> Path:
+    candidates = [root / "events.json", root / "output" / "events.json"] + list(root.rglob("events.json"))
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError("events.json을 찾지 못했습니다. recording.zip 전체를 선택해주세요.")
+
+
+def _resolve_screenshot(output_dir: Path, event: dict[str, Any]) -> Path | None:
+    screenshot = event.get("screenshot")
+    if screenshot:
+        return output_dir / str(screenshot)
+    screenshot_path = event.get("screenshot_path")
+    if screenshot_path:
+        return Path(str(screenshot_path))
+    return None
+
+
+def _write_anchor(img: Image.Image, x: int, y: int, target: Path, index: int) -> tuple[str, int, int]:
+    half = ANCHOR_SIZE // 2
+    left = max(0, x - half)
+    top = max(0, y - half)
+    right = min(img.width, x + half)
+    bottom = min(img.height, y + half)
+    if right - left < 40 or bottom - top < 40:
+        left = max(0, min(left, img.width - 40))
+        top = max(0, min(top, img.height - 40))
+        right = min(img.width, left + max(40, right - left))
+        bottom = min(img.height, top + max(40, bottom - top))
+    anchor = img.crop((left, top, right, bottom))
+    name = f"{index:03d}_anchor.png"
+    anchor.save(target / name)
+    return name, x - left, y - top
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def _safe_name(name: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in name).strip("_") or "workflow"
