@@ -8,6 +8,7 @@ from typing import Callable
 
 from PIL import Image
 
+from .window_focus import focus_pos_window
 from .workflow import MacroStep, MacroWorkflow, workflow_asset_base
 
 LogFn = Callable[[str], None]
@@ -20,6 +21,7 @@ class RunOptions:
     confirm_before_run: bool = True
     step_delay_ms: int = 250
     max_retries: int = 2
+    focus_pos_before_run: bool = True
 
 
 class StopRequested(Exception):
@@ -46,6 +48,13 @@ class MacroRunner:
 
         pyautogui.FAILSAFE = True
         pyautogui.PAUSE = 0.05
+        if options.focus_pos_before_run:
+            focus_result = focus_pos_window()
+            if focus_result.success:
+                self._log(f"POS 창 포커스: {focus_result.title}")
+            else:
+                self._log(f"POS 창 자동 포커스 확인 필요: {focus_result.message}")
+                time.sleep(0.4)
         self._log(f"'{workflow.name}' 실행 시작: {len(workflow.steps)}단계")
         for step in workflow.steps:
             self._check_stop()

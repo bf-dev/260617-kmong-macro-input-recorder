@@ -184,3 +184,13 @@ def test_visual_role_fallback_finds_orange_action_near_expected() -> None:
     assert point is not None
     assert 310 <= point[0] <= 330
     assert 285 <= point[1] <= 300
+
+
+def test_pos_window_title_scoring_prefers_pos_and_excludes_macro() -> None:
+    from macro_input_recorder.window_focus import score_pos_window_title
+
+    assert score_pos_window_title("MOM'S TOUCH POS") > 30
+    assert score_pos_window_title("P2C 포스 판매") > 20
+    assert score_pos_window_title("P2C 포스 자동화") == 0
+    assert score_pos_window_title("Macro Input Recorder") == 0
+    assert score_pos_window_title("Random Browser") == 0

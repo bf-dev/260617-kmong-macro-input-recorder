@@ -4,7 +4,6 @@ import queue
 import threading
 import time
 import tkinter as tk
-from pathlib import Path
 from tkinter import messagebox, ttk
 
 from .automation import MacroRunner, RunOptions, StopRequested
@@ -183,6 +182,7 @@ class P2CApp:
         if self.worker and self.worker.is_alive():
             messagebox.showwarning("실행 중", "이미 작업이 실행 중입니다.")
             return
+        self._hide_control_window()
         self.worker = threading.Thread(target=self._run_worker, args=(workflow,), daemon=True)
         self.worker.start()
 
@@ -197,6 +197,8 @@ class P2CApp:
         except Exception as exc:
             self._log(f"오류: {exc}")
             self.status_var.set(f"오류: {exc}")
+        finally:
+            self.root.after(0, self._show_control_window)
 
     def start_hourly(self) -> None:
         workflow = self.selected()
@@ -207,6 +209,7 @@ class P2CApp:
             messagebox.showwarning("실행 중", "이미 작업이 실행 중입니다.")
             return
         self.hourly_stop.clear()
+        self._hide_control_window()
         self.worker = threading.Thread(target=self._hourly_worker, args=(workflow,), daemon=True)
         self.worker.start()
 
@@ -228,6 +231,19 @@ class P2CApp:
             if self.hourly_stop.wait(interval):
                 break
         self.status_var.set("자동 실행 중지됨")
+        self.root.after(0, self._show_control_window)
+
+    def _hide_control_window(self) -> None:
+        try:
+            self.root.iconify()
+        except Exception:
+            pass
+
+    def _show_control_window(self) -> None:
+        try:
+            self.root.deiconify()
+        except Exception:
+            pass
 
     def stop_all(self) -> None:
         self.hourly_stop.set()
