@@ -199,7 +199,10 @@ def _import_events_file(events_path: Path, workflow_name: str, created_from: str
         x = _optional_int(raw.get("x"))
         y = _optional_int(raw.get("y"))
         if screenshot_path and screenshot_path.exists():
-            if event_type == "mouse_click" and x is not None and y is not None and _looks_like_recorder_window_click(screenshot_path, x, y):
+            if event_type == "mouse_click" and x is not None and y is not None and (
+                _looks_like_taskbar_switch_click(screenshot_path, x, y)
+                or _looks_like_recorder_window_click(screenshot_path, x, y)
+            ):
                 continue
             with Image.open(screenshot_path) as img:
                 width, height = img.size
@@ -340,6 +343,29 @@ def _looks_like_recorder_window_click(screenshot_path: Path, x: int, y: int) -> 
     except Exception:
         return False
     return False
+
+
+def _looks_like_taskbar_switch_click(screenshot_path: Path, x: int, y: int) -> bool:
+    """Filter taskbar/app-switch clicks used to return to the recorder."""
+    try:
+        import numpy as np
+
+        with Image.open(screenshot_path) as img:
+            arr = np.array(img.convert("RGB"))
+        height, width = arr.shape[:2]
+        if y < height - 36:
+            return False
+        left = max(0, x - 25)
+        right = min(width, x + 25)
+        top = max(0, y - 15)
+        bottom = min(height, y + 15)
+        click_region = arr[top:bottom, left:right]
+        bottom_band = arr[max(0, height - 34) : height, :, :]
+        click_dark_ratio = (click_region.mean(axis=2) < 90).mean()
+        band_dark_ratio = (bottom_band.mean(axis=2) < 90).mean()
+        return bool(click_dark_ratio > 0.35 and band_dark_ratio > 0.20)
+    except Exception:
+        return False
 
 
 def _safe_name(name: str) -> str:

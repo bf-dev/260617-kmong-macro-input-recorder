@@ -109,3 +109,28 @@ def test_import_recording_ignores_alt_tab_and_recorder_window_clicks(tmp_path: P
 
     assert len(workflow.steps) == 1
     assert workflow.steps[0].index == 1
+
+
+def test_import_recording_ignores_taskbar_switch_click(tmp_path: Path) -> None:
+    output = tmp_path / "rec" / "output"
+    images = output / "images"
+    images.mkdir(parents=True)
+    Image.new("RGB", (1024, 768), "white").save(images / "000001_mouse_click.png")
+    taskbar_shot = Image.new("RGB", (1024, 768), "white")
+    for px in range(0, 1024):
+        for py in range(734, 768):
+            taskbar_shot.putpixel((px, py), (25, 25, 25))
+    taskbar_shot.save(images / "000002_mouse_click.png")
+    events = {
+        "event_count": 2,
+        "events": [
+            {"index": 1, "event_type": "mouse_click", "x": 180, "y": 420, "button": "left", "relative_ms": 100, "screenshot": "images/000001_mouse_click.png"},
+            {"index": 2, "event_type": "mouse_click", "x": 324, "y": 750, "button": "left", "relative_ms": 200, "screenshot": "images/000002_mouse_click.png"},
+        ],
+    }
+    (output / "events.json").write_text(json.dumps(events), encoding="utf-8")
+
+    workflow = import_recording(output, "개점", tmp_path / "workflows")
+
+    assert len(workflow.steps) == 1
+    assert workflow.steps[0].index == 1
