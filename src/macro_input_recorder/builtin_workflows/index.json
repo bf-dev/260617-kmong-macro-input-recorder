@@ -1,0 +1,38 @@
+[
+  {
+    "name": "마감",
+    "session": "20260617_102542",
+    "steps": 7,
+    "roles": {
+      "": 1,
+      "light_button": 1,
+      "modal_primary": 3,
+      "modal_secondary": 1,
+      "orange_action": 1
+    }
+  },
+  {
+    "name": "가승인",
+    "session": "20260617_102707",
+    "steps": 15,
+    "roles": {
+      "": 3,
+      "light_button": 8,
+      "modal_primary": 2,
+      "modal_secondary": 1,
+      "orange_action": 1
+    }
+  },
+  {
+    "name": "개점",
+    "session": "20260617_102739",
+    "steps": 10,
+    "roles": {
+      "": 1,
+      "light_button": 1,
+      "modal_primary": 3,
+      "modal_secondary": 2,
+      "orange_action": 3
+    }
+  }
+]

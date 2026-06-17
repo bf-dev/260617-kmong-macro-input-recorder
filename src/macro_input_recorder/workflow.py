@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import zipfile
+import importlib.resources as resources
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,7 @@ class MacroStep:
     anchor_offset_x: int | None = None
     anchor_offset_y: int | None = None
     wait_after_ms: int = 250
+    role: str = ""
     note: str = ""
 
     @classmethod
@@ -97,6 +99,54 @@ def workflows_dir() -> Path:
 def workflow_file(name: str) -> Path:
     safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in name).strip("_") or "workflow"
     return workflows_dir() / f"{safe}.json"
+
+
+
+
+BUILTIN_WORKFLOW_VERSION = "2026-06-17-independent-v2"
+BUILTIN_WORKFLOW_NAMES = ("가승인", "개점", "마감")
+
+
+def ensure_builtin_workflows(root: Path | None = None, force: bool = False) -> list[MacroWorkflow]:
+    """Install bundled P2C workflows into user data so the EXE works alone.
+
+    The delivered program should not ask the customer to import recording.zip.
+    We copy package-bundled workflows and anchor images on first run (or when
+    the bundled version changes), then normal loading/running uses the same
+    user-data structure as custom workflows.
+    """
+    folder = root or workflows_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    marker = folder / ".builtin_version"
+    current_version = marker.read_text(encoding="utf-8").strip() if marker.exists() else ""
+    if force or current_version != BUILTIN_WORKFLOW_VERSION:
+        _copy_builtin_workflow_files(folder)
+        marker.write_text(BUILTIN_WORKFLOW_VERSION, encoding="utf-8")
+    workflows = load_workflows(folder)
+    return [workflow for workflow in workflows if workflow.name in BUILTIN_WORKFLOW_NAMES]
+
+
+def _copy_builtin_workflow_files(folder: Path) -> None:
+    package = "macro_input_recorder.builtin_workflows"
+    package_root = resources.files(package)
+    for name in BUILTIN_WORKFLOW_NAMES:
+        json_text = (package_root / f"{name}.json").read_text(encoding="utf-8")
+        (folder / f"{name}.json").write_text(json_text, encoding="utf-8")
+        source_dir = package_root / name
+        target_dir = folder / _safe_name(name)
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
+        _copy_resource_tree(source_dir, target_dir)
+
+
+def _copy_resource_tree(source: resources.abc.Traversable, target: Path) -> None:
+    target.mkdir(parents=True, exist_ok=True)
+    for item in source.iterdir():
+        destination = target / item.name
+        if item.is_dir():
+            _copy_resource_tree(item, destination)
+        else:
+            destination.write_bytes(item.read_bytes())
 
 
 def load_workflows(root: Path | None = None) -> list[MacroWorkflow]:
@@ -226,6 +276,7 @@ def _import_events_file(events_path: Path, workflow_name: str, created_from: str
             anchor_offset_x=offset_x,
             anchor_offset_y=offset_y,
             wait_after_ms=wait_after_ms,
+            role=_infer_click_role(screenshot_path, x, y) if screenshot_path and screenshot_path.exists() and x is not None and y is not None and event_type == "mouse_click" else "",
         )
         steps.append(step)
 
@@ -366,6 +417,43 @@ def _looks_like_taskbar_switch_click(screenshot_path: Path, x: int, y: int) -> b
         return bool(click_dark_ratio > 0.35 and band_dark_ratio > 0.20)
     except Exception:
         return False
+
+
+
+def _infer_click_role(screenshot_path: Path, x: int, y: int) -> str:
+    """Classify common POS clicks for smarter runtime fallback.
+
+    This is deliberately simple and visual: it detects the customer's POS orange
+    action tiles and the dark confirmation dialogs with yellow/white buttons.
+    Runtime can then recover even when exact template matching fails.
+    """
+    try:
+        import numpy as np
+
+        with Image.open(screenshot_path) as img:
+            arr = np.array(img.convert("RGB"))
+        height, width = arr.shape[:2]
+        left = max(0, x - 12)
+        right = min(width, x + 12)
+        top = max(0, y - 12)
+        bottom = min(height, y + 12)
+        patch = arr[top:bottom, left:right]
+        if patch.size == 0:
+            return ""
+        r, g, b = patch.reshape(-1, 3).mean(axis=0)
+        gray = arr.mean(axis=2)
+        dark_modal = (gray < 95).mean() > 0.08
+        if dark_modal and r > 180 and 120 <= g <= 210 and b < 80:
+            return "modal_primary"
+        if dark_modal and r > 210 and g > 210 and b > 210:
+            return "modal_secondary"
+        if r > 180 and 120 <= g <= 210 and b < 100:
+            return "orange_action"
+        if r > 140 and g > 140 and b > 140:
+            return "light_button"
+    except Exception:
+        return ""
+    return ""
 
 
 def _safe_name(name: str) -> str:

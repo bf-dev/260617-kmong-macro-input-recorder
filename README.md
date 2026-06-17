@@ -1,41 +1,31 @@
-# P2C 포스 자동화
+# P2C POS Macro
 
-P2C/MOM'S TOUCH 포스 업무를 녹화 기반으로 실행하는 Windows GUI 도구입니다.
+P2C/MOM'S TOUCH 포스용 Windows 자동화 프로그램입니다. 고객 녹화 파일을 고객 PC에서 다시 불러오는 방식이 아니라, 확인된 3개 작업을 프로그램 안에 내장해서 독립 실행되도록 만들었습니다.
 
-## 포함 기능
+## 포함 작업
 
-- `recording.zip` 또는 녹화 `output/events.json` 가져오기
-- 하나의 `recording.zip` 안에 여러 녹화 폴더가 있으면 작업을 나눠서 모두 가져오기
-- 클릭 위치 주변 스크린샷을 anchor 이미지로 저장
-- 실행 시 anchor 이미지 인식 우선, 실패하면 화면 비율 좌표 보정으로 fallback
-- 개점/마감/가승인 등 녹화 작업별 저장 및 1회 실행
-- 시간당 가승인 반복 실행 설정
-- 한국어 Tkinter UI
+- 가승인
+- 개점
+- 마감
 
-## 고객 기본 범위
+첫 실행 시 내장 작업과 이미지 기준점(anchor)을 `문서/P2C_POS_자동화/workflows`에 자동 복구합니다. 고객은 `recording.zip`을 따로 선택할 필요가 없습니다.
 
-- 포스: P2C
-- 시간당 싸이버거 세트 5개
-- 가승인 금액: 38,500원
-- 개점/마감 포함
+## 실행 로직
 
-## 사용 흐름
+- 버튼 클릭 위치 주변 이미지 anchor를 먼저 화면에서 찾습니다.
+- 해상도/배율 차이에 대비해 0.88~1.12 범위의 다중 배율 이미지 매칭을 시도합니다.
+- 이미지가 흔들리면 포스 화면 구조를 보고 주황색 액션 버튼, 어두운 확인창의 노란 확인 버튼, 흰 보조 버튼을 감지합니다.
+- 그래도 못 찾는 경우에만 녹화 당시 화면 비율 기준 좌표 보정을 사용합니다.
+- 녹화 종료 과정의 Alt+Tab, 작업표시줄 클릭, 매크로 녹화기 창 클릭은 가져오기 단계에서 제외했습니다.
 
-1. 고객 PC에서 `MacroInputRecorder.exe`로 각 작업을 녹화합니다.
-2. 저장된 `recording.zip` 또는 `output` 폴더를 `P2CPOSMacro.exe`에서 가져옵니다.
-3. 작업 이름을 `개점`, `마감`, `가승인`처럼 저장합니다.
-4. 실행 탭에서 작업을 선택하고 1회 실행 또는 시간당 자동 실행을 시작합니다.
-
-## 검증
+## 개발/검증
 
 ```bash
-python3 -m compileall src tests
-python3 -m pytest -q
-pyinstaller --noconfirm packaging/p2c_pos_macro.spec
+python3.12 -m venv .venv
+. .venv/bin/activate
+pip install -e '.[test,build]'
+pytest -q
+python scripts/capture_p2c_preview.py --output delivery/p2c-pos-macro-ui-preview.png
 ```
 
-Windows EXE는 GitHub Actions `.github/workflows/windows-exe.yml`에서 `P2CPOSMacro.exe`로 빌드됩니다.
-
-## 고객 녹화 확인
-
-고객이 보낸 `recording.zip`에는 3개 녹화 세션이 들어있었습니다. 앱에서 가져오면 `가승인_01_...`처럼 세션별 작업으로 분리되어 저장되고, 각 클릭은 이미지 anchor와 화면 비율 좌표 fallback을 함께 보관합니다.
+Windows EXE는 GitHub Actions의 `Build Windows EXE` 워크플로로 빌드합니다.

@@ -134,3 +134,53 @@ def test_import_recording_ignores_taskbar_switch_click(tmp_path: Path) -> None:
 
     assert len(workflow.steps) == 1
     assert workflow.steps[0].index == 1
+
+
+def test_ensure_builtin_workflows_installs_three_independent_jobs(tmp_path: Path) -> None:
+    from macro_input_recorder.workflow import ensure_builtin_workflows
+
+    workflows = ensure_builtin_workflows(tmp_path / "workflows", force=True)
+
+    assert [workflow.name for workflow in workflows] == ["가승인", "개점", "마감"]
+    assert {workflow.name: len(workflow.steps) for workflow in workflows} == {"가승인": 15, "개점": 10, "마감": 7}
+    for name in ["가승인", "개점", "마감"]:
+        assert (tmp_path / "workflows" / f"{name}.json").exists()
+        assert (tmp_path / "workflows" / name / "anchors").is_dir()
+
+
+def test_visual_role_fallback_finds_modal_primary_button() -> None:
+    from macro_input_recorder.automation import _find_button_by_role
+    from macro_input_recorder.workflow import MacroStep
+
+    image = Image.new("RGB", (800, 600), "white")
+    for px in range(240, 560):
+        for py in range(180, 430):
+            image.putpixel((px, py), (55, 55, 55))
+    for px in range(420, 500):
+        for py in range(365, 395):
+            image.putpixel((px, py), (239, 180, 30))
+    step = MacroStep(index=1, event_type="mouse_click", x_ratio=0.58, y_ratio=0.64, role="modal_primary")
+
+    point = _find_button_by_role(image, step)
+
+    assert point is not None
+    assert 450 <= point[0] <= 470
+    assert 375 <= point[1] <= 390
+
+
+def test_visual_role_fallback_finds_orange_action_near_expected() -> None:
+    from macro_input_recorder.automation import _find_button_by_role
+    from macro_input_recorder.workflow import MacroStep
+
+    image = Image.new("RGB", (800, 600), "white")
+    for left in (80, 260, 440):
+        for px in range(left, left + 120):
+            for py in range(250, 330):
+                image.putpixel((px, py), (237, 171, 20))
+    step = MacroStep(index=1, event_type="mouse_click", x_ratio=0.40, y_ratio=0.48, role="orange_action")
+
+    point = _find_button_by_role(image, step)
+
+    assert point is not None
+    assert 310 <= point[0] <= 330
+    assert 285 <= point[1] <= 300

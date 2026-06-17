@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 project_root = Path(SPECPATH).parent
 hiddenimports = collect_submodules("pynput") + collect_submodules("mss") + collect_submodules("pyautogui")
@@ -15,7 +15,7 @@ a = Analysis(
     [str(project_root / "scripts" / "run_p2c_app.py")],
     pathex=[str(project_root / "src")],
     binaries=[],
-    datas=[],
+    datas=collect_data_files("macro_input_recorder", includes=["builtin_workflows/**/*"]),
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

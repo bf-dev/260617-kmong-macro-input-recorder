@@ -5,10 +5,10 @@ import threading
 import time
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
 
 from .automation import MacroRunner, RunOptions, StopRequested
-from .workflow import MacroWorkflow, import_recording_many, load_workflows, workflows_dir
+from .workflow import MacroWorkflow, ensure_builtin_workflows, load_workflows, workflows_dir
 
 
 class P2CApp:
@@ -47,15 +47,12 @@ class P2CApp:
         notebook.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
         self.run_tab = ttk.Frame(notebook, padding=12)
         self.settings_tab = ttk.Frame(notebook, padding=12)
-        self.import_tab = ttk.Frame(notebook, padding=12)
         self.log_tab = ttk.Frame(notebook, padding=12)
         notebook.add(self.run_tab, text="실행")
         notebook.add(self.settings_tab, text="설정")
-        notebook.add(self.import_tab, text="녹화 가져오기")
         notebook.add(self.log_tab, text="로그")
         self._build_run_tab()
         self._build_settings_tab()
-        self._build_import_tab()
         self._build_log_tab()
 
     def _build_run_tab(self) -> None:
@@ -98,10 +95,10 @@ class P2CApp:
 
         row = ttk.Frame(self.settings_tab)
         row.pack(fill=tk.X, pady=(14, 0))
-        ttk.Label(row, text="작업 선택").pack(side=tk.LEFT)
+        ttk.Label(row, text="내장 작업 선택").pack(side=tk.LEFT)
         self.workflow_combo = ttk.Combobox(row, textvariable=self.selected_workflow, state="readonly", width=42)
         self.workflow_combo.pack(side=tk.LEFT, padx=(8, 8))
-        ttk.Button(row, text="새로고침", command=self._reload_workflows).pack(side=tk.LEFT)
+        ttk.Button(row, text="내장 작업 복구", command=lambda: self._reload_workflows(force_builtin=True)).pack(side=tk.LEFT)
 
         settings = ttk.LabelFrame(self.settings_tab, text="기본 설정", padding=10)
         settings.pack(fill=tk.X, pady=(14, 0))
@@ -125,55 +122,15 @@ class P2CApp:
         ttk.Button(hourly, text="시간당 자동 시작", command=self.start_hourly).pack(side=tk.LEFT)
         ttk.Button(hourly, text="자동 중지", command=self.stop_all).pack(side=tk.LEFT, padx=(8, 0))
 
-    def _build_import_tab(self) -> None:
-        ttk.Label(
-            self.import_tab,
-            text="MacroInputRecorder에서 저장한 recording.zip 또는 output 폴더를 선택하세요. 작업 이름은 예: 개점, 마감, 가승인",
-            wraplength=680,
-        ).pack(anchor=tk.W)
-        form = ttk.Frame(self.import_tab)
-        form.pack(fill=tk.X, pady=(14, 0))
-        ttk.Label(form, text="작업 이름").grid(row=0, column=0, sticky=tk.W)
-        self.import_name_var = tk.StringVar(value="개점")
-        ttk.Entry(form, textvariable=self.import_name_var, width=24).grid(row=0, column=1, sticky=tk.W, padx=(8, 12))
-        ttk.Button(form, text="recording.zip 가져오기", command=self.import_recording_file).grid(row=0, column=2, sticky=tk.W)
-        ttk.Button(form, text="저장 폴더 열기", command=self.open_workflow_folder).grid(row=0, column=3, sticky=tk.W, padx=(8, 0))
-        ttk.Label(
-            self.import_tab,
-            text=(
-                "가져오기 시 클릭 위치 주변 이미지를 anchor로 저장합니다. 실행 때는 먼저 anchor 이미지를 화면에서 찾고, "
-                "찾지 못하면 녹화 당시 화면 비율 기준 좌표로 보정합니다."
-            ),
-            foreground="#555",
-            wraplength=680,
-        ).pack(anchor=tk.W, pady=(18, 0))
-
     def _build_log_tab(self) -> None:
         self.log_text = tk.Text(self.log_tab, height=20, wrap=tk.WORD)
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
-    def import_recording_file(self) -> None:
-        path = filedialog.askopenfilename(
-            title="recording.zip 선택",
-            filetypes=[("Recording zip/json", "*.zip *.json"), ("All files", "*.*")],
-        )
-        if not path:
-            folder = filedialog.askdirectory(title="output 폴더 선택")
-            path = folder or ""
-        if not path:
-            return
-        name = self.import_name_var.get().strip() or "녹화작업"
+    def _reload_workflows(self, select: str | None = None, force_builtin: bool = False) -> None:
         try:
-            workflows = import_recording_many(Path(path), name)
+            ensure_builtin_workflows(force=force_builtin)
         except Exception as exc:
-            messagebox.showerror("가져오기 실패", str(exc))
-            self._log(f"가져오기 실패: {exc}")
-            return
-        total_steps = sum(len(workflow.steps) for workflow in workflows)
-        self._log(f"가져오기 완료: {len(workflows)}개 작업 / 총 {total_steps}단계")
-        self._reload_workflows(select=workflows[0].name if workflows else None)
-
-    def _reload_workflows(self, select: str | None = None) -> None:
+            self._log(f"내장 작업 준비 오류: {exc}")
         self.workflows = load_workflows()
         values = [w.name for w in self.workflows]
         self.workflow_combo.configure(values=values)
@@ -210,14 +167,14 @@ class P2CApp:
     def run_selected_once(self) -> None:
         workflow = self.selected()
         if workflow is None:
-            messagebox.showwarning("작업 없음", "먼저 recording.zip을 가져와 작업을 선택해주세요.")
+            messagebox.showwarning("작업 없음", "내장 작업을 불러오지 못했습니다. 프로그램을 다시 실행해 주세요.")
             return
         self._start_workflow(workflow)
 
     def run_named_once(self, label: str) -> None:
         workflow = self.find_workflow(label)
         if workflow is None:
-            messagebox.showwarning("작업 없음", f"먼저 '{label}' 작업 녹화를 가져와주세요.")
+            messagebox.showwarning("작업 없음", f"내장 '{label}' 작업을 불러오지 못했습니다. 프로그램을 다시 실행해 주세요.")
             return
         self.selected_workflow.set(workflow.name)
         self._start_workflow(workflow)
@@ -244,7 +201,7 @@ class P2CApp:
     def start_hourly(self) -> None:
         workflow = self.selected()
         if workflow is None:
-            messagebox.showwarning("작업 없음", "가승인 녹화 작업을 선택해주세요.")
+            messagebox.showwarning("작업 없음", "가승인 내장 작업을 선택해주세요.")
             return
         if self.worker and self.worker.is_alive():
             messagebox.showwarning("실행 중", "이미 작업이 실행 중입니다.")
