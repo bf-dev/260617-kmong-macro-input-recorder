@@ -109,22 +109,50 @@ def save_workflow(workflow: MacroWorkflow, root: Path | None = None) -> Path:
 
 
 def import_recording(source: Path, workflow_name: str, root: Path | None = None) -> MacroWorkflow:
-    """Import a MacroInputRecorder output zip/folder into a replayable workflow.
+    """Import one MacroInputRecorder output zip/folder into a replayable workflow.
 
     Expected input forms:
     - recording.zip containing output/events.json and output/images/*.png
     - a folder containing output/events.json
     - the output folder itself containing events.json
     """
+    return import_recording_many(source, workflow_name, root)[0]
+
+
+def import_recording_many(source: Path, workflow_name: str, root: Path | None = None) -> list[MacroWorkflow]:
+    """Import every recording session found in a zip/folder.
+
+    Customer recordings often arrive as one `recording.zip` containing several
+    timestamped recording folders. In that case each `events.json` becomes a
+    separate workflow so no sequence is silently ignored.
+    """
     base = root or workflows_dir()
     base.mkdir(parents=True, exist_ok=True)
+    source_name = _safe_name(workflow_name)
+    staging = base / f"_{source_name}_import_source"
+    if staging.exists():
+        shutil.rmtree(staging)
+    source_root = _extract_or_locate(source, staging)
+    events_paths = _find_all_events_json(source_root)
+    if not events_paths:
+        raise FileNotFoundError("events.json을 찾지 못했습니다. recording.zip 전체를 선택해주세요.")
+    if len(events_paths) == 1:
+        return [_import_events_file(events_paths[0], workflow_name, str(source), base)]
+
+    workflows: list[MacroWorkflow] = []
+    for idx, events_path in enumerate(events_paths, start=1):
+        session_name = events_path.parent.parent.name if events_path.parent.name == "output" else events_path.parent.name
+        name = f"{workflow_name}_{idx:02d}_{session_name}"
+        workflows.append(_import_events_file(events_path, name, str(source), base))
+    return workflows
+
+
+def _import_events_file(events_path: Path, workflow_name: str, created_from: str, base: Path) -> MacroWorkflow:
     target = base / _safe_name(workflow_name)
     if target.exists():
         shutil.rmtree(target)
     target.mkdir(parents=True)
 
-    source_root = _extract_or_locate(source, target / "source")
-    events_path = _find_events_json(source_root)
     data = json.loads(events_path.read_text(encoding="utf-8"))
     events = data.get("events") or []
 
@@ -176,7 +204,7 @@ def import_recording(source: Path, workflow_name: str, root: Path | None = None)
     workflow = MacroWorkflow(
         name=workflow_name,
         source="recording",
-        created_from=str(source),
+        created_from=created_from,
         description=f"{len(steps)}개 입력 단계가 녹화 파일에서 생성되었습니다.",
         steps=steps,
     )
@@ -207,6 +235,17 @@ def _find_events_json(root: Path) -> Path:
         if candidate.exists():
             return candidate
     raise FileNotFoundError("events.json을 찾지 못했습니다. recording.zip 전체를 선택해주세요.")
+
+
+def _find_all_events_json(root: Path) -> list[Path]:
+    candidates: list[Path] = []
+    for candidate in [root / "events.json", root / "output" / "events.json"]:
+        if candidate.exists():
+            candidates.append(candidate)
+    for candidate in sorted(root.rglob("events.json")):
+        if candidate not in candidates:
+            candidates.append(candidate)
+    return candidates
 
 
 def _resolve_screenshot(output_dir: Path, event: dict[str, Any]) -> Path | None:

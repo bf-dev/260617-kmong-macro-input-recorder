@@ -8,7 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .automation import MacroRunner, RunOptions, StopRequested
-from .workflow import MacroWorkflow, import_recording, load_workflows, workflows_dir
+from .workflow import MacroWorkflow, import_recording_many, load_workflows, workflows_dir
 
 
 class P2CApp:
@@ -142,13 +142,14 @@ class P2CApp:
             return
         name = self.import_name_var.get().strip() or "녹화작업"
         try:
-            workflow = import_recording(Path(path), name)
+            workflows = import_recording_many(Path(path), name)
         except Exception as exc:
             messagebox.showerror("가져오기 실패", str(exc))
             self._log(f"가져오기 실패: {exc}")
             return
-        self._log(f"가져오기 완료: {workflow.name} / {len(workflow.steps)}단계")
-        self._reload_workflows(select=workflow.name)
+        total_steps = sum(len(workflow.steps) for workflow in workflows)
+        self._log(f"가져오기 완료: {len(workflows)}개 작업 / 총 {total_steps}단계")
+        self._reload_workflows(select=workflows[0].name if workflows else None)
 
     def _reload_workflows(self, select: str | None = None) -> None:
         self.workflows = load_workflows()
