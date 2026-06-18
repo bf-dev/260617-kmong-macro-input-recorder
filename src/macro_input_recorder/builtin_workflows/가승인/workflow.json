@@ -3,7 +3,7 @@
   "name": "가승인",
   "source": "built-in",
   "created_from": "customer recording session 20260617_102707",
-  "description": "가승인 내장 자동화 작업입니다. 화면 이미지 인식, 버튼 색상 탐지, 좌표 보정을 순서대로 사용합니다.",
+  "description": "가승인 내장 자동화 작업입니다. 화면 이미지 인식, 버튼 색상 탐지, 좌표 보정을 순서대로 사용합니다. 각 단계 로그에 실제 클릭 대상 버튼명이 표시됩니다.",
   "steps": [
     {
       "index": 1,
@@ -19,7 +19,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 250,
-      "role": "light_button"
+      "role": "light_button",
+      "note": "온라인 주문 목록"
     },
     {
       "index": 2,
@@ -34,7 +35,8 @@
       "anchor": "anchors/002_anchor.png",
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
-      "wait_after_ms": 808
+      "wait_after_ms": 808,
+      "note": "상품 선택 화면"
     },
     {
       "index": 3,
@@ -50,7 +52,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 808,
-      "role": "light_button"
+      "role": "light_button",
+      "note": "싸이버거 세트 선택"
     },
     {
       "index": 4,
@@ -66,7 +69,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 800,
-      "role": "light_button"
+      "role": "light_button",
+      "note": "옵션 선택 첫 항목"
     },
     {
       "index": 5,
@@ -82,7 +86,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 744,
-      "role": "modal_primary"
+      "role": "modal_primary",
+      "note": "옵션 선택 완료"
     },
     {
       "index": 6,
@@ -98,7 +103,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 832,
-      "role": "light_button"
+      "role": "light_button",
+      "note": "주문 목록 첫 항목"
     },
     {
       "index": 7,
@@ -114,7 +120,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 496,
-      "role": "light_button"
+      "role": "light_button",
+      "note": "주문 목록 첫 항목 확인"
     },
     {
       "index": 8,
@@ -130,7 +137,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 464,
-      "role": "light_button"
+      "role": "light_button",
+      "note": "주문 목록 첫 항목 재확인"
     },
     {
       "index": 9,
@@ -146,7 +154,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 528,
-      "role": "light_button"
+      "role": "light_button",
+      "note": "주문 목록 첫 항목 선택"
     },
     {
       "index": 10,
@@ -161,7 +170,8 @@
       "anchor": "anchors/010_anchor.png",
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
-      "wait_after_ms": 2400
+      "wait_after_ms": 2400,
+      "note": "결제 메뉴 진입"
     },
     {
       "index": 11,
@@ -176,7 +186,8 @@
       "anchor": "anchors/011_anchor.png",
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
-      "wait_after_ms": 2500
+      "wait_after_ms": 2500,
+      "note": "신용카드 결제"
     },
     {
       "index": 12,
@@ -192,7 +203,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 1040,
-      "role": "light_button"
+      "role": "light_button",
+      "note": "가승인 카드결제"
     },
     {
       "index": 13,
@@ -208,7 +220,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 792,
-      "role": "orange_action"
+      "role": "orange_action",
+      "note": "결제 실행"
     },
     {
       "index": 14,
@@ -224,7 +237,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 752,
-      "role": "modal_primary"
+      "role": "modal_primary",
+      "note": "결제 확인창 [예]"
     },
     {
       "index": 15,
@@ -240,7 +254,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 2264,
-      "role": "modal_secondary"
+      "role": "modal_secondary",
+      "note": "영수증 출력 안내 [아니요]"
     }
   ]
 }

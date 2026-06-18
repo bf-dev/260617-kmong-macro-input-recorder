@@ -197,7 +197,8 @@ def test_visual_role_fallback_finds_modal_primary_when_resolution_moves_button()
 
 
 def test_leftover_cleanup_ignores_two_button_confirm_dialog() -> None:
-    from macro_input_recorder.automation import _find_modal_primary_button, _find_single_button_modal_primary_button
+    from macro_input_recorder.automation import _find_modal_primary_button, _find_single_button_modal_primary_button, _modal_is_ready_for_step
+    from macro_input_recorder.workflow import MacroStep
 
     image = Image.new("RGB", (1280, 720), "white")
     for px in range(350, 950):
@@ -212,6 +213,33 @@ def test_leftover_cleanup_ignores_two_button_confirm_dialog() -> None:
 
     assert _find_modal_primary_button(image) is not None
     assert _find_single_button_modal_primary_button(image) is None
+    assert _modal_is_ready_for_step(image, MacroStep(index=1, event_type="mouse_click", role="modal_primary"))
+    assert _modal_is_ready_for_step(image, MacroStep(index=1, event_type="mouse_click", role="modal_secondary"))
+
+
+def test_modal_secondary_requires_visible_secondary_button() -> None:
+    from macro_input_recorder.automation import _modal_is_ready_for_step
+    from macro_input_recorder.workflow import MacroStep
+
+    image = Image.new("RGB", (1280, 720), "white")
+    for px in range(350, 950):
+        for py in range(160, 590):
+            image.putpixel((px, py), (48, 48, 48))
+    for px in range(580, 720):
+        for py in range(505, 550):
+            image.putpixel((px, py), (239, 180, 30))
+
+    assert _modal_is_ready_for_step(image, MacroStep(index=1, event_type="mouse_click", role="modal_primary"))
+    assert not _modal_is_ready_for_step(image, MacroStep(index=1, event_type="mouse_click", role="modal_secondary"))
+
+
+def test_sales_to_home_steps_use_clear_fixed_coordinates() -> None:
+    from macro_input_recorder.automation import _sales_to_home_steps
+
+    steps = _sales_to_home_steps()
+
+    assert [step.note for step in steps] == ["판매 화면 우상단 뒤로/닫기", "목록 화면 우상단 뒤로/닫기"]
+    assert all(step.x_ratio == 0.974609375 for step in steps)
 
 
 def test_p2c_screen_classifier_detects_home_and_operation_screens() -> None:

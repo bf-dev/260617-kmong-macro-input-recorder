@@ -18,6 +18,7 @@ LogFn = Callable[[str], None]
 class RunOptions:
     confidence: float = 0.78
     coordinate_fallback: bool = True
+    fixed_coordinate_first: bool = True
     confirm_before_run: bool = True
     step_delay_ms: int = 250
     max_retries: int = 2
@@ -66,6 +67,15 @@ class MacroRunner:
 
     def _adapt_workflow_steps(self, workflow: MacroWorkflow, screenshot: Image.Image) -> list[MacroStep]:
         """Skip unsafe navigation clicks when the POS is already on the target screen."""
+        if workflow.name == "개점":
+            if _looks_like_operation_screen(screenshot):
+                self._log("개점 시작 위치 감지: 개점/마감 화면")
+                return [step for step in workflow.steps if step.index >= 2]
+            if _looks_like_home_menu(screenshot):
+                self._log("개점 시작 위치 감지: 메인 메뉴")
+                return workflow.steps
+            self._log("개점 시작 위치 감지: 판매 화면")
+            return _sales_to_home_steps() + workflow.steps
         if workflow.name != "마감":
             return workflow.steps
         if _looks_like_home_menu(screenshot):
@@ -81,7 +91,8 @@ class MacroRunner:
 
         if step.event_type == "mouse_click":
             x, y, route = self._locate_click(step, workflow, options)
-            self._log(f"{step.index}단계 클릭: {x}, {y} ({route})")
+            target = f" - {step.note}" if step.note else ""
+            self._log(f"{step.index}단계 클릭{target}: {x}, {y} ({route})")
             pyautogui.click(x, y, button=(step.button or "left"))
             return
         if step.event_type == "key_press":
@@ -96,6 +107,10 @@ class MacroRunner:
         self._log(f"{step.index}단계 건너뜀: {step.event_type}")
 
     def _locate_click(self, step: MacroStep, workflow: MacroWorkflow, options: RunOptions) -> tuple[int, int, str]:
+        if options.fixed_coordinate_first and workflow.source == "built-in":
+            point = self._try_fixed_coordinate(step)
+            if point:
+                return (*point, "고정 POS 좌표")
         for attempt in range(options.max_retries + 1):
             self._check_stop()
             found = self._try_template(step, workflow, options.confidence)
@@ -125,6 +140,16 @@ class MacroRunner:
             if point:
                 return (*point, "좌표 보정 fallback")
         raise RuntimeError(f"{step.index}단계 버튼 이미지를 찾지 못했습니다.")
+
+    def _try_fixed_coordinate(self, step: MacroStep) -> tuple[int, int] | None:
+        if step.x_ratio is None or step.y_ratio is None:
+            return None
+        import pyautogui
+
+        screenshot = pyautogui.screenshot()
+        if step.role.startswith("modal") and not _modal_is_ready_for_step(screenshot, step):
+            return None
+        return self._fallback_point(step)
 
     def _try_template(self, step: MacroStep, workflow: MacroWorkflow, confidence: float) -> tuple[int, int] | None:
         if not step.anchor or step.anchor_offset_x is None or step.anchor_offset_y is None:
@@ -279,6 +304,20 @@ def _find_single_button_modal_primary_button(screenshot: Image.Image) -> tuple[i
     return _find_modal_primary_button(screenshot)
 
 
+def _modal_is_ready_for_step(screenshot: Image.Image, step: MacroStep) -> bool:
+    try:
+        import numpy as np
+    except Exception:
+        return False
+    arr = np.array(screenshot.convert("RGB"))
+    modal_bounds = _largest_dark_modal(arr)
+    if not modal_bounds:
+        return False
+    if step.role == "modal_secondary":
+        return _modal_has_secondary_button(arr, modal_bounds)
+    return True
+
+
 def _modal_button_target(bounds: tuple[int, int, int, int]) -> tuple[float, float]:
     left, top, right, bottom = bounds
     return (left + right) / 2, top + (bottom - top) * 0.78
@@ -360,6 +399,37 @@ def _looks_like_operation_screen(screenshot: Image.Image) -> bool:
         if comp_width >= 20 and comp_height >= 18 and area >= 250:
             keypad_blocks += 1
     return bool(white_ratio > 0.42 and keypad_blocks >= 5)
+
+
+def _sales_to_home_steps() -> list[MacroStep]:
+    return [
+        MacroStep(
+            index=101,
+            event_type="mouse_click",
+            x=998,
+            y=28,
+            screen_width=1024,
+            screen_height=768,
+            x_ratio=0.974609375,
+            y_ratio=0.036458333333333336,
+            button="left",
+            wait_after_ms=650,
+            note="판매 화면 우상단 뒤로/닫기",
+        ),
+        MacroStep(
+            index=102,
+            event_type="mouse_click",
+            x=998,
+            y=28,
+            screen_width=1024,
+            screen_height=768,
+            x_ratio=0.974609375,
+            y_ratio=0.036458333333333336,
+            button="left",
+            wait_after_ms=900,
+            note="목록 화면 우상단 뒤로/닫기",
+        ),
+    ]
 
 
 def _expected_point(step: MacroStep, width: int, height: int) -> tuple[float, float]:

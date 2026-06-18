@@ -3,7 +3,7 @@
   "name": "마감",
   "source": "built-in",
   "created_from": "customer recording session 20260617_102542",
-  "description": "마감 내장 자동화 작업입니다. 화면 이미지 인식, 버튼 색상 탐지, 좌표 보정을 순서대로 사용합니다.",
+  "description": "마감 내장 자동화 작업입니다. 화면 이미지 인식, 버튼 색상 탐지, 좌표 보정을 순서대로 사용합니다. 각 단계 로그에 실제 클릭 대상 버튼명이 표시됩니다.",
   "steps": [
     {
       "index": 1,
@@ -19,7 +19,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 250,
-      "role": "orange_action"
+      "role": "orange_action",
+      "note": "메인 메뉴 [개점/마감]"
     },
     {
       "index": 2,
@@ -35,7 +36,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 1696,
-      "role": "light_button"
+      "role": "light_button",
+      "note": "상단 [개점]"
     },
     {
       "index": 3,
@@ -50,7 +52,8 @@
       "anchor": "anchors/003_anchor.png",
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
-      "wait_after_ms": 1320
+      "wait_after_ms": 1320,
+      "note": "오른쪽 [개점]"
     },
     {
       "index": 4,
@@ -66,7 +69,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 920,
-      "role": "modal_primary"
+      "role": "modal_primary",
+      "note": "개점 확인창 [예]"
     },
     {
       "index": 5,
@@ -82,7 +86,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 1216,
-      "role": "modal_secondary"
+      "role": "modal_secondary",
+      "note": "현금 시재 등록 안내 [아니요]"
     },
     {
       "index": 6,
@@ -98,7 +103,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 991,
-      "role": "modal_primary"
+      "role": "modal_primary",
+      "note": "개점 완료 알림 [확인]"
     },
     {
       "index": 7,
@@ -114,7 +120,8 @@
       "anchor_offset_x": 90,
       "anchor_offset_y": 90,
       "wait_after_ms": 1193,
-      "role": "modal_primary"
+      "role": "modal_primary",
+      "note": "스마트오더/KIOSK 안내 [확인]"
     }
   ]
 }
