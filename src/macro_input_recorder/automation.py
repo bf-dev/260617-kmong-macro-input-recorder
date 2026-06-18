@@ -67,6 +67,12 @@ class MacroRunner:
 
     def _adapt_workflow_steps(self, workflow: MacroWorkflow, screenshot: Image.Image) -> list[MacroStep]:
         """Skip unsafe navigation clicks when the POS is already on the target screen."""
+        if workflow.name == "가승인":
+            if _looks_like_home_menu(screenshot):
+                self._log("가승인 시작 위치 감지: 메인 메뉴")
+                return [step for step in workflow.steps if step.index >= 2]
+            self._log("가승인 시작 위치 감지: 주문/판매 화면")
+            return workflow.steps
         if workflow.name == "개점":
             if _looks_like_operation_screen(screenshot):
                 self._log("개점 시작 위치 감지: 개점/마감 화면")

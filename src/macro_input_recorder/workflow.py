@@ -103,7 +103,7 @@ def workflow_file(name: str) -> Path:
 
 
 
-BUILTIN_WORKFLOW_VERSION = "2026-06-18-fixed-coordinate-first-v1"
+BUILTIN_WORKFLOW_VERSION = "2026-06-18-preauth-corrected-v1"
 BUILTIN_WORKFLOW_NAMES = ("가승인", "개점", "마감")
 
 

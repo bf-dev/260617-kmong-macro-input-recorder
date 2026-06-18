@@ -142,13 +142,50 @@ def test_ensure_builtin_workflows_installs_three_independent_jobs(tmp_path: Path
     workflows = ensure_builtin_workflows(tmp_path / "workflows", force=True)
 
     assert [workflow.name for workflow in workflows] == ["가승인", "개점", "마감"]
-    assert {workflow.name: len(workflow.steps) for workflow in workflows} == {"가승인": 15, "개점": 7, "마감": 10}
+    assert {workflow.name: len(workflow.steps) for workflow in workflows} == {"가승인": 14, "개점": 7, "마감": 10}
     created_from = {workflow.name: workflow.created_from for workflow in workflows}
     assert created_from["개점"].endswith("20260617_102542")
     assert created_from["마감"].endswith("20260617_102739")
     for name in ["가승인", "개점", "마감"]:
         assert (tmp_path / "workflows" / f"{name}.json").exists()
         assert (tmp_path / "workflows" / name / "anchors").is_dir()
+
+
+def test_preapproval_workflow_matches_customer_corrected_route(tmp_path: Path) -> None:
+    from macro_input_recorder.workflow import ensure_builtin_workflows
+
+    workflows = ensure_builtin_workflows(tmp_path / "workflows", force=True)
+    preapproval = next(workflow for workflow in workflows if workflow.name == "가승인")
+    notes = [step.note for step in preapproval.steps]
+
+    assert notes[:2] == ["주문/판매 화면 우상단 뒤로/닫기", "메인 메뉴 [판매]"]
+    assert "주문 목록 첫 항목" not in notes
+    assert notes[-2:] == ["가승인 후 판매 화면 우상단 뒤로/닫기", "메인 메뉴 [배달조회/주문조회]"]
+
+
+def test_preapproval_home_start_skips_initial_close() -> None:
+    from macro_input_recorder.automation import MacroRunner
+    from macro_input_recorder.workflow import MacroStep, MacroWorkflow
+
+    home = Image.new("RGB", (1024, 768), "white")
+    for y in (250, 370):
+        for x in (220, 370, 520, 670):
+            for px in range(x, x + 120):
+                for py in range(y, y + 90):
+                    home.putpixel((px, py), (237, 171, 20))
+    workflow = MacroWorkflow(
+        name="가승인",
+        source="built-in",
+        steps=[
+            MacroStep(index=1, event_type="mouse_click", note="주문/판매 화면 우상단 뒤로/닫기"),
+            MacroStep(index=2, event_type="mouse_click", note="메인 메뉴 [판매]"),
+            MacroStep(index=3, event_type="mouse_click", note="상품 선택 화면"),
+        ],
+    )
+
+    steps = MacroRunner()._adapt_workflow_steps(workflow, home)
+
+    assert [step.note for step in steps] == ["메인 메뉴 [판매]", "상품 선택 화면"]
 
 
 def test_visual_role_fallback_finds_modal_primary_button() -> None:
