@@ -55,13 +55,26 @@ class MacroRunner:
             else:
                 self._log(f"POS 창 자동 포커스 확인 필요: {focus_result.message}")
                 time.sleep(0.4)
-        self._log(f"'{workflow.name}' 실행 시작: {len(workflow.steps)}단계")
-        for step in workflow.steps:
+        steps = self._adapt_workflow_steps(workflow, pyautogui.screenshot())
+        self._log(f"'{workflow.name}' 실행 시작: {len(steps)}단계")
+        for step in steps:
             self._check_stop()
             self._run_step(step, workflow, options)
             time.sleep(max(0, options.step_delay_ms + step.wait_after_ms) / 1000)
         self._dismiss_leftover_modal()
         self._log(f"'{workflow.name}' 실행 완료")
+
+    def _adapt_workflow_steps(self, workflow: MacroWorkflow, screenshot: Image.Image) -> list[MacroStep]:
+        """Skip unsafe navigation clicks when the POS is already on the target screen."""
+        if workflow.name != "마감":
+            return workflow.steps
+        if _looks_like_home_menu(screenshot):
+            self._log("마감 시작 위치 감지: 메인 메뉴")
+            return [step for step in workflow.steps if step.index >= 3]
+        if _looks_like_operation_screen(screenshot):
+            self._log("마감 시작 위치 감지: 개점/마감 화면")
+            return [step for step in workflow.steps if step.index >= 4]
+        return workflow.steps
 
     def _run_step(self, step: MacroStep, workflow: MacroWorkflow, options: RunOptions) -> None:
         import pyautogui
@@ -146,7 +159,7 @@ class MacroRunner:
         """
         import pyautogui
 
-        point = _find_modal_primary_button(pyautogui.screenshot())
+        point = _find_single_button_modal_primary_button(pyautogui.screenshot())
         if not point:
             return False
         x, y = point
@@ -254,9 +267,99 @@ def _find_modal_primary_button(screenshot: Image.Image) -> tuple[int, int] | Non
     return _find_button_by_role(screenshot, step)
 
 
+def _find_single_button_modal_primary_button(screenshot: Image.Image) -> tuple[int, int] | None:
+    try:
+        import numpy as np
+    except Exception:
+        return None
+    arr = np.array(screenshot.convert("RGB"))
+    modal_bounds = _largest_dark_modal(arr)
+    if not modal_bounds or _modal_has_secondary_button(arr, modal_bounds):
+        return None
+    return _find_modal_primary_button(screenshot)
+
+
 def _modal_button_target(bounds: tuple[int, int, int, int]) -> tuple[float, float]:
     left, top, right, bottom = bounds
     return (left + right) / 2, top + (bottom - top) * 0.78
+
+
+def _modal_has_secondary_button(arr, bounds: tuple[int, int, int, int]) -> bool:
+    try:
+        import cv2
+        import numpy as np
+    except Exception:
+        return False
+    left, top, right, bottom = bounds
+    modal = arr[top:bottom, left:right]
+    if modal.size == 0:
+        return False
+    gray = modal.mean(axis=2)
+    diff_rg = abs(modal[:, :, 0].astype("int16") - modal[:, :, 1].astype("int16"))
+    mask = ((gray > 210) & (diff_rg < 28)).astype("uint8")
+    num, _labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 8)
+    modal_height, modal_width = gray.shape[:2]
+    for idx in range(1, num):
+        comp_left, comp_top, comp_width, comp_height, area = [int(v) for v in stats[idx]]
+        if comp_width < 45 or comp_height < 18 or area < 250:
+            continue
+        if comp_width > modal_width * 0.45 or comp_height > modal_height * 0.25:
+            continue
+        _cx, cy = [float(v) for v in centroids[idx]]
+        if cy < modal_height * 0.45:
+            continue
+        return True
+    return False
+
+
+def _looks_like_home_menu(screenshot: Image.Image) -> bool:
+    try:
+        import cv2
+        import numpy as np
+    except Exception:
+        return False
+    arr = np.array(screenshot.convert("RGB"))
+    height, width = arr.shape[:2]
+    r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
+    mask = ((r > 175) & (g > 105) & (g < 225) & (b < 120)).astype("uint8")
+    num, _labels, stats, _centroids = cv2.connectedComponentsWithStats(mask, 8)
+    large_tiles = 0
+    for idx in range(1, num):
+        left, top, comp_width, comp_height, area = [int(v) for v in stats[idx]]
+        if area < width * height * 0.006:
+            continue
+        if comp_width < width * 0.06 or comp_height < height * 0.06:
+            continue
+        if left < width * 0.12 or left > width * 0.88 or top < height * 0.12:
+            continue
+        large_tiles += 1
+    return large_tiles >= 4
+
+
+def _looks_like_operation_screen(screenshot: Image.Image) -> bool:
+    try:
+        import cv2
+        import numpy as np
+    except Exception:
+        return False
+    if _looks_like_home_menu(screenshot):
+        return False
+    arr = np.array(screenshot.convert("RGB"))
+    height, width = arr.shape[:2]
+    center = arr[int(height * 0.18) : int(height * 0.86), int(width * 0.10) : int(width * 0.78)]
+    if center.size == 0:
+        return False
+    white_ratio = (center.mean(axis=2) > 190).mean()
+    right = arr[int(height * 0.20) : int(height * 0.90), int(width * 0.76) : width]
+    gray = right.mean(axis=2)
+    mask = ((gray > 90) & (gray < 190)).astype("uint8")
+    num, _labels, stats, _centroids = cv2.connectedComponentsWithStats(mask, 8)
+    keypad_blocks = 0
+    for idx in range(1, num):
+        _left, _top, comp_width, comp_height, area = [int(v) for v in stats[idx]]
+        if comp_width >= 20 and comp_height >= 18 and area >= 250:
+            keypad_blocks += 1
+    return bool(white_ratio > 0.42 and keypad_blocks >= 5)
 
 
 def _expected_point(step: MacroStep, width: int, height: int) -> tuple[float, float]:

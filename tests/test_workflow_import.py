@@ -172,7 +172,7 @@ def test_visual_role_fallback_finds_modal_primary_button() -> None:
 
 
 def test_visual_role_fallback_finds_modal_primary_when_resolution_moves_button() -> None:
-    from macro_input_recorder.automation import _find_button_by_role, _find_modal_primary_button
+    from macro_input_recorder.automation import _find_button_by_role, _find_modal_primary_button, _find_single_button_modal_primary_button
     from macro_input_recorder.workflow import MacroStep
 
     image = Image.new("RGB", (1280, 720), "white")
@@ -193,6 +193,50 @@ def test_visual_role_fallback_finds_modal_primary_when_resolution_moves_button()
     assert 640 <= point[0] <= 660
     assert 525 <= point[1] <= 535
     assert _find_modal_primary_button(image) == point
+    assert _find_single_button_modal_primary_button(image) == point
+
+
+def test_leftover_cleanup_ignores_two_button_confirm_dialog() -> None:
+    from macro_input_recorder.automation import _find_modal_primary_button, _find_single_button_modal_primary_button
+
+    image = Image.new("RGB", (1280, 720), "white")
+    for px in range(350, 950):
+        for py in range(160, 590):
+            image.putpixel((px, py), (48, 48, 48))
+    for px in range(450, 590):
+        for py in range(505, 550):
+            image.putpixel((px, py), (245, 245, 245))
+    for px in range(640, 780):
+        for py in range(505, 550):
+            image.putpixel((px, py), (239, 180, 30))
+
+    assert _find_modal_primary_button(image) is not None
+    assert _find_single_button_modal_primary_button(image) is None
+
+
+def test_p2c_screen_classifier_detects_home_and_operation_screens() -> None:
+    from macro_input_recorder.automation import _looks_like_home_menu, _looks_like_operation_screen
+
+    home = Image.new("RGB", (1024, 768), "white")
+    for y in (250, 370):
+        for x in (220, 370, 520, 670):
+            for px in range(x, x + 120):
+                for py in range(y, y + 90):
+                    home.putpixel((px, py), (237, 171, 20))
+
+    operation = Image.new("RGB", (1024, 768), "white")
+    for px in range(0, 1024):
+        for py in range(0, 55):
+            operation.putpixel((px, py), (232, 184, 55))
+    for y in (180, 245, 310, 375, 440, 505):
+        for px in range(850, 940):
+            for py in range(y, y + 46):
+                operation.putpixel((px, py), (140, 125, 112))
+
+    assert _looks_like_home_menu(home)
+    assert not _looks_like_operation_screen(home)
+    assert _looks_like_operation_screen(operation)
+    assert not _looks_like_home_menu(operation)
 
 
 def test_visual_role_fallback_finds_orange_action_near_expected() -> None:
