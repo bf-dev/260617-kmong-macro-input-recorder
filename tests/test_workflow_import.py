@@ -194,3 +194,15 @@ def test_pos_window_title_scoring_prefers_pos_and_excludes_macro() -> None:
     assert score_pos_window_title("P2C 포스 자동화") == 0
     assert score_pos_window_title("Macro Input Recorder") == 0
     assert score_pos_window_title("Random Browser") == 0
+
+
+def test_daily_schedule_time_parsing_and_due_once() -> None:
+    from datetime import datetime
+    from macro_input_recorder.daily_schedule import daily_run_key, is_due_now, parse_hhmm
+
+    assert parse_hhmm("10:30") == (10, 30)
+    assert parse_hhmm("21시30분") == (21, 30)
+    now = datetime(2026, 6, 18, 10, 30, 5)
+    assert is_due_now(now, (10, 30), None)
+    assert not is_due_now(now, (10, 30), daily_run_key(now))
+    assert not is_due_now(datetime(2026, 6, 18, 10, 31), (10, 30), None)
