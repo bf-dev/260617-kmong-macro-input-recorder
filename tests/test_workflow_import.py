@@ -142,7 +142,10 @@ def test_ensure_builtin_workflows_installs_three_independent_jobs(tmp_path: Path
     workflows = ensure_builtin_workflows(tmp_path / "workflows", force=True)
 
     assert [workflow.name for workflow in workflows] == ["가승인", "개점", "마감"]
-    assert {workflow.name: len(workflow.steps) for workflow in workflows} == {"가승인": 15, "개점": 10, "마감": 7}
+    assert {workflow.name: len(workflow.steps) for workflow in workflows} == {"가승인": 15, "개점": 7, "마감": 10}
+    created_from = {workflow.name: workflow.created_from for workflow in workflows}
+    assert created_from["개점"].endswith("20260617_102542")
+    assert created_from["마감"].endswith("20260617_102739")
     for name in ["가승인", "개점", "마감"]:
         assert (tmp_path / "workflows" / f"{name}.json").exists()
         assert (tmp_path / "workflows" / name / "anchors").is_dir()
