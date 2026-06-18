@@ -168,6 +168,30 @@ def test_visual_role_fallback_finds_modal_primary_button() -> None:
     assert 375 <= point[1] <= 390
 
 
+def test_visual_role_fallback_finds_modal_primary_when_resolution_moves_button() -> None:
+    from macro_input_recorder.automation import _find_button_by_role, _find_modal_primary_button
+    from macro_input_recorder.workflow import MacroStep
+
+    image = Image.new("RGB", (1280, 720), "white")
+    for px in range(350, 950):
+        for py in range(160, 590):
+            image.putpixel((px, py), (48, 48, 48))
+    for px in range(580, 720):
+        for py in range(505, 550):
+            image.putpixel((px, py), (239, 180, 30))
+    # Recorded 4:3 coordinates can be far from the real centered dialog on a
+    # wider POS monitor. Modal fallback should use the dialog shape, not reject
+    # the button only because the expected coordinate moved.
+    step = MacroStep(index=1, event_type="mouse_click", x_ratio=0.80, y_ratio=0.90, role="modal_primary")
+
+    point = _find_button_by_role(image, step)
+
+    assert point is not None
+    assert 640 <= point[0] <= 660
+    assert 525 <= point[1] <= 535
+    assert _find_modal_primary_button(image) == point
+
+
 def test_visual_role_fallback_finds_orange_action_near_expected() -> None:
     from macro_input_recorder.automation import _find_button_by_role
     from macro_input_recorder.workflow import MacroStep

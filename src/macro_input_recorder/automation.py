@@ -60,6 +60,7 @@ class MacroRunner:
             self._check_stop()
             self._run_step(step, workflow, options)
             time.sleep(max(0, options.step_delay_ms + step.wait_after_ms) / 1000)
+        self._dismiss_leftover_modal()
         self._log(f"'{workflow.name}' 실행 완료")
 
     def _run_step(self, step: MacroStep, workflow: MacroWorkflow, options: RunOptions) -> None:
@@ -92,6 +93,20 @@ class MacroRunner:
         role_point = self._try_visual_role(step)
         if role_point:
             return (*role_point, f"화면 구조 감지 {step.role}")
+        if not (step.role or "").startswith("modal"):
+            dismissed = self._dismiss_leftover_modal()
+            if dismissed:
+                time.sleep(0.45)
+                for attempt in range(options.max_retries + 1):
+                    self._check_stop()
+                    found = self._try_template(step, workflow, options.confidence)
+                    if found:
+                        return (*found, f"팝업 확인 후 이미지 인식 {attempt + 1}회")
+                    role_point = self._try_visual_role(step)
+                    if role_point:
+                        return (*role_point, f"팝업 확인 후 화면 구조 감지 {step.role}")
+                    if attempt < options.max_retries:
+                        time.sleep(0.35)
         if options.coordinate_fallback:
             point = self._fallback_point(step)
             if point:
@@ -120,6 +135,24 @@ class MacroRunner:
 
         screenshot = pyautogui.screenshot()
         return _find_button_by_role(screenshot, step)
+
+    def _dismiss_leftover_modal(self) -> bool:
+        """Click a single visible POS yellow confirm button if a modal blocks the screen.
+
+        Customer machines can show a same-style POS alert when an action is
+        already completed (for example, manually pressing 개점 after the store is
+        already open). Those alerts have different text from the recorded
+        template, so this visual cleanup keeps the POS from being left blocked.
+        """
+        import pyautogui
+
+        point = _find_modal_primary_button(pyautogui.screenshot())
+        if not point:
+            return False
+        x, y = point
+        self._log(f"남은 POS 알림 확인: {x}, {y}")
+        pyautogui.click(x, y)
+        return True
 
     def _fallback_point(self, step: MacroStep) -> tuple[int, int] | None:
         import pyautogui
@@ -198,14 +231,32 @@ def _find_button_by_role(screenshot: Image.Image, step: MacroStep) -> tuple[int,
                 continue
         elif modal_bounds and _inside_bounds(cx, cy, modal_bounds, padding=8):
             continue
-        distance = ((cx - expected[0]) ** 2 + (cy - expected[1]) ** 2) ** 0.5
+        if role.startswith("modal") and modal_bounds:
+            target = _modal_button_target(modal_bounds)
+            distance = ((cx - target[0]) ** 2 + (cy - target[1]) ** 2) ** 0.5
+        else:
+            distance = ((cx - expected[0]) ** 2 + (cy - expected[1]) ** 2) ** 0.5
         candidates.append((distance, round(cx), round(cy)))
     if not candidates:
         return None
     distance, x, y = min(candidates, key=lambda item: item[0])
-    if distance > max(120, min(width, height) * 0.15):
+    if role.startswith("modal"):
+        limit = max(260, min(width, height) * 0.30)
+    else:
+        limit = max(120, min(width, height) * 0.15)
+    if distance > limit:
         return None
     return x, y
+
+
+def _find_modal_primary_button(screenshot: Image.Image) -> tuple[int, int] | None:
+    step = MacroStep(index=0, event_type="mouse_click", role="modal_primary")
+    return _find_button_by_role(screenshot, step)
+
+
+def _modal_button_target(bounds: tuple[int, int, int, int]) -> tuple[float, float]:
+    left, top, right, bottom = bounds
+    return (left + right) / 2, top + (bottom - top) * 0.78
 
 
 def _expected_point(step: MacroStep, width: int, height: int) -> tuple[float, float]:
