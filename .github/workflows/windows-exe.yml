@@ -2,7 +2,7 @@ name: Build Windows EXE
 
 on:
   push:
-    branches: [main]
+    branches: [main, portfolio-shots]
     tags:
       - "v*"
   workflow_dispatch:
@@ -25,6 +25,20 @@ jobs:
       - name: Install, test, and build executable
         shell: pwsh
         run: .\build\windows-build.ps1
+
+      - name: Collect clean window screenshot
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path screenshots | Out-Null
+          Copy-Item "dist\p2c-pos-macro-ui-preview.png" "screenshots\clean.png" -Force
+          if (!(Test-Path "screenshots\clean.png")) { throw "screenshots\clean.png was not created" }
+
+      - name: Upload clean window screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: clean-shot
+          path: screenshots/clean.png
+          if-no-files-found: error
 
       - name: Upload executable artifact
         uses: actions/upload-artifact@v4

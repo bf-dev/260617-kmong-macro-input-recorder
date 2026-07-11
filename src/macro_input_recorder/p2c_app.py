@@ -53,6 +53,7 @@ class P2CApp:
         title.pack(anchor=tk.W)
 
         notebook = ttk.Notebook(outer)
+        self.notebook = notebook
         notebook.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
         self.run_tab = ttk.Frame(notebook, padding=12)
         self.settings_tab = ttk.Frame(notebook, padding=12)
@@ -113,7 +114,7 @@ class P2CApp:
         settings.pack(fill=tk.X, pady=(14, 0))
         ttk.Label(settings, text="가승인 금액").grid(row=0, column=0, sticky=tk.W)
         ttk.Entry(settings, textvariable=self.amount_var, width=12).grid(row=0, column=1, sticky=tk.W, padx=(8, 18))
-        ttk.Label(settings, text="시간당 싸이버거 세트 수량").grid(row=0, column=2, sticky=tk.W)
+        ttk.Label(settings, text="시간당 가승인 세트 수량").grid(row=0, column=2, sticky=tk.W)
         ttk.Entry(settings, textvariable=self.count_var, width=8).grid(row=0, column=3, sticky=tk.W, padx=(8, 18))
         ttk.Label(settings, text="이미지 인식 기준").grid(row=1, column=0, sticky=tk.W, pady=(8, 0))
         ttk.Scale(settings, variable=self.confidence_var, from_=0.60, to=0.95, orient=tk.HORIZONTAL, length=180).grid(row=1, column=1, columnspan=2, sticky=tk.W, padx=(8, 18), pady=(8, 0))
