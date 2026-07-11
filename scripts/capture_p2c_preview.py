@@ -13,11 +13,14 @@ from macro_input_recorder.p2c_app import P2CApp
 
 
 def _full_window_bbox(root: tk.Tk) -> tuple[int, int, int, int]:
-    """Return the outer window rectangle (incl. the native title bar and borders).
+    """Return the visible window rectangle (native title bar included).
 
     winfo_rootx/rooty only cover the client area, so a preview grabbed from those
-    would drop the Windows title bar. Walk up to the real top-level HWND and read
-    GetWindowRect so the capture keeps the standard Windows chrome.
+    would drop the Windows title bar. Walk up to the real top-level HWND and use
+    the DWM extended frame bounds, which give the *visible* window edges. Plain
+    GetWindowRect on Windows 10/11 includes an invisible resize border that
+    extends past the visible window, so grabbing it would bleed a sliver of
+    whatever sits behind the app into the shot.
     """
     user32 = ctypes.windll.user32
     # Set wide handle types so 64-bit HWNDs are not truncated to 32-bit ints.
@@ -32,10 +35,35 @@ def _full_window_bbox(root: tk.Tk) -> tuple[int, int, int, int]:
     if not top_hwnd:
         top_hwnd = user32.GetForegroundWindow()
 
+    # Preferred: DWM extended frame bounds = the visible window, no invisible border.
+    try:
+        dwmapi = ctypes.windll.dwmapi
+        dwmapi.DwmGetWindowAttribute.argtypes = [
+            wintypes.HWND,
+            wintypes.DWORD,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+        ]
+        dwmapi.DwmGetWindowAttribute.restype = ctypes.c_long
+        DWMWA_EXTENDED_FRAME_BOUNDS = 9
+        drect = wintypes.RECT()
+        hr = dwmapi.DwmGetWindowAttribute(
+            top_hwnd,
+            DWMWA_EXTENDED_FRAME_BOUNDS,
+            ctypes.byref(drect),
+            ctypes.sizeof(drect),
+        )
+        if hr == 0 and drect.right > drect.left and drect.bottom > drect.top:
+            return drect.left, drect.top, drect.right, drect.bottom
+    except Exception:
+        pass
+
     rect = wintypes.RECT()
     if top_hwnd and user32.GetWindowRect(top_hwnd, ctypes.byref(rect)):
         if rect.right > rect.left and rect.bottom > rect.top:
-            return rect.left, rect.top, rect.right, rect.bottom
+            # Trim the invisible resize border that DWM would have excluded.
+            border = 7
+            return rect.left + border, rect.top, rect.right - border, rect.bottom - border
 
     # Fallback: extend the client area upward to include an estimated title bar.
     left = root.winfo_rootx()
